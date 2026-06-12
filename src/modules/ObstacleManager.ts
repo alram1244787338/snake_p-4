@@ -1,6 +1,8 @@
+import { GRID_COUNT } from "./constants";
+
 export class ObstacleManager {
     obstacles: HTMLElement[] = [];
-    obstacleCoords: {x: number, y: number}[] = [];
+    obstacleCoords: { x: number; y: number }[] = [];
     stageElement: HTMLElement;
 
     constructor() {
@@ -9,7 +11,7 @@ export class ObstacleManager {
 
     generateObstacles(stage: number) {
         this.clearObstacles();
-        const count = stage; // Number of obstacles equals stage number
+        const count = stage; // 障碍物数量 = 关卡数
 
         for (let i = 0; i < count; i++) {
             const obstacle = document.createElement('div');
@@ -18,17 +20,16 @@ export class ObstacleManager {
             obstacle.style.height = '10px';
             obstacle.style.backgroundColor = 'gray';
             obstacle.style.position = 'absolute';
-            
+
             let x = 0;
             let y = 0;
             let overlap = true;
-            
-            // Simple collision avoidance for spawn
-            while(overlap) {
-                x = Math.round(Math.random() * 29) * 10;
-                y = Math.round(Math.random() * 29) * 10;
+
+            while (overlap) {
+                x = Math.round(Math.random() * (GRID_COUNT - 1)) * 10;
+                y = Math.round(Math.random() * (GRID_COUNT - 1)) * 10;
                 overlap = this.obstacleCoords.some(coord => coord.x === x && coord.y === y);
-                // Also avoid starting area (top-left)
+                // 避开左上角起始区域
                 if (x < 50 && y < 50) overlap = true;
             }
 
@@ -36,7 +37,7 @@ export class ObstacleManager {
             obstacle.style.top = y + 'px';
             this.stageElement.appendChild(obstacle);
             this.obstacles.push(obstacle);
-            this.obstacleCoords.push({x, y});
+            this.obstacleCoords.push({ x, y });
         }
     }
 
@@ -47,7 +48,7 @@ export class ObstacleManager {
         this.obstacles = [];
         this.obstacleCoords = [];
     }
-    
+
     checkCollision(x: number, y: number): boolean {
         return this.obstacleCoords.some(coord => coord.x === x && coord.y === y);
     }

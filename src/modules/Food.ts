@@ -1,38 +1,35 @@
+import { GRID_COUNT } from "./constants";
+
 // 定义食物类
 class Food {
     // 定义一个属性表示食物所对应的元素
     element: HTMLElement;
 
     constructor() {
-        // 获取页面中的food元素并将其赋值给element
-        // ! 表示该元素一定存在
         this.element = document.getElementById('food')!;
     }
 
-    // 定义一个获取食物X轴坐标的方法
+    // 获取食物 X 轴坐标
     get X() {
         return this.element.offsetLeft;
     }
 
-    // 定义一个获取食物Y轴坐标的方法
+    // 获取食物 Y 轴坐标
     get Y() {
         return this.element.offsetTop;
     }
 
-    // 修改食物位置的方法
-    change(obstacles: {x: number, y: number}[] = []) {
-        // 生成随机的位置
-        // 食物的位置最小是0 最大是290
-        // 蛇移动一次就是一格，一格的大小就是10，所以食物的坐标必须是整10
-        let top, left;
+    // 修改食物位置
+    change(obstacles: { x: number; y: number }[] = []) {
+        // 坐标必须是 GRID_SIZE (10) 的整数倍，范围 0 ~ (GRID_COUNT-1)*10
+        let top: number, left: number;
         let isValid = false;
 
         while (!isValid) {
-            top = Math.round(Math.random() * 29) * 10;
-            left = Math.round(Math.random() * 29) * 10;
+            top = Math.round(Math.random() * (GRID_COUNT - 1)) * 10;
+            left = Math.round(Math.random() * (GRID_COUNT - 1)) * 10;
 
             isValid = true;
-            // Check if food spawns on an obstacle
             for (const obstacle of obstacles) {
                 if (left === obstacle.x && top === obstacle.y) {
                     isValid = false;
