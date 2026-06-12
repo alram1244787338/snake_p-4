@@ -30,6 +30,12 @@ class ScorePanel {
         }
     }
 
+    // 直接加一笔奖励分（例如击杀 Boss），统一走这里，避免外部直接改 score 字段
+    addBonus(points: number) {
+        this.score += points;
+        this.scoreEle.innerHTML = this.score + '';
+    }
+
     // 提升关卡的方法
     stageUp() {
         if (this.stage < this.maxStage) {

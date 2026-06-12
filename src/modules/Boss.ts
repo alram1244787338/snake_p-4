@@ -1,3 +1,11 @@
+import {
+    BOARD_MIN,
+    BOSS_HP_PER_STAGE,
+    BOSS_MAX,
+    BOSS_SIZE,
+    CELL,
+} from "./constants";
+
 export class Boss {
     element: HTMLElement;
     hp: number;
@@ -7,31 +15,42 @@ export class Boss {
     Y: number = 0;
 
     constructor(stage: number) {
-        this.maxHp = stage * 5; // Boss HP scales with stage
+        this.maxHp = stage * BOSS_HP_PER_STAGE; // Boss 血量随关卡提升
         this.hp = this.maxHp;
-        
-        // Create boss element
+
+        // 创建 Boss 元素
         this.element = document.createElement('div');
         this.element.className = 'boss';
-        this.element.style.width = '30px';
-        this.element.style.height = '30px';
+        this.element.style.width = BOSS_SIZE + 'px';
+        this.element.style.height = BOSS_SIZE + 'px';
         this.element.style.backgroundColor = 'red';
         this.element.style.position = 'absolute';
         this.element.style.borderRadius = '50%';
         this.element.style.zIndex = '10';
-        
+
         const stageElement = document.getElementById('stage')!;
         stageElement.appendChild(this.element);
-        
+
         this.spawn();
     }
 
     spawn() {
-        // Random position
-        this.X = Math.round(Math.random() * 27) * 10;
-        this.Y = Math.round(Math.random() * 27) * 10;
+        // 随机落点，保证整只 Boss 落在棋盘内
+        const maxIndex = BOSS_MAX / CELL;
+        this.X = Math.round(Math.random() * maxIndex) * CELL;
+        this.Y = Math.round(Math.random() * maxIndex) * CELL;
         this.element.style.left = this.X + 'px';
         this.element.style.top = this.Y + 'px';
+    }
+
+    // 判断某个格点（蛇头 / 子弹）是否落在 Boss 范围内
+    containsPoint(x: number, y: number): boolean {
+        return (
+            x >= this.X &&
+            x <= this.X + BOSS_SIZE &&
+            y >= this.Y &&
+            y <= this.Y + BOSS_SIZE
+        );
     }
 
     takeDamage(damage: number = 1) {
@@ -39,7 +58,7 @@ export class Boss {
         if (this.hp <= 0) {
             this.die();
         } else {
-            // Flash effect
+            // 受击闪白
             this.element.style.backgroundColor = 'white';
             setTimeout(() => {
                 this.element.style.backgroundColor = 'red';
@@ -55,20 +74,20 @@ export class Boss {
     }
 
     move() {
-        // Simple random movement
+        // 简单的随机走位
         const direction = Math.floor(Math.random() * 4);
-        switch(direction) {
-            case 0: this.Y -= 10; break;
-            case 1: this.Y += 10; break;
-            case 2: this.X -= 10; break;
-            case 3: this.X += 10; break;
+        switch (direction) {
+            case 0: this.Y -= CELL; break;
+            case 1: this.Y += CELL; break;
+            case 2: this.X -= CELL; break;
+            case 3: this.X += CELL; break;
         }
-        
-        // Boundaries check (0-290 for 30px boss means max is 270)
-        if (this.X < 0) this.X = 0;
-        if (this.X > 270) this.X = 270;
-        if (this.Y < 0) this.Y = 0;
-        if (this.Y > 270) this.Y = 270;
+
+        // 边界收束，保证整只 Boss 不越界
+        if (this.X < BOARD_MIN) this.X = BOARD_MIN;
+        if (this.X > BOSS_MAX) this.X = BOSS_MAX;
+        if (this.Y < BOARD_MIN) this.Y = BOARD_MIN;
+        if (this.Y > BOSS_MAX) this.Y = BOSS_MAX;
 
         this.element.style.left = this.X + 'px';
         this.element.style.top = this.Y + 'px';
