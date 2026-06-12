@@ -1,37 +1,48 @@
-export class Boss {
+import * as Grid from './Grid';
+
+export class Boss implements Grid.GridEntity {
+    // Boss 视觉/占位尺寸（像素），占 3 格
+    static SIZE = 30;
+
     element: HTMLElement;
     hp: number;
     maxHp: number;
     isAlive: boolean = true;
+    // 坐标数据为真源
     X: number = 0;
     Y: number = 0;
 
     constructor(stage: number) {
         this.maxHp = stage * 5; // Boss HP scales with stage
         this.hp = this.maxHp;
-        
+
         // Create boss element
         this.element = document.createElement('div');
         this.element.className = 'boss';
-        this.element.style.width = '30px';
-        this.element.style.height = '30px';
+        this.element.style.width = Boss.SIZE + 'px';
+        this.element.style.height = Boss.SIZE + 'px';
         this.element.style.backgroundColor = 'red';
         this.element.style.position = 'absolute';
         this.element.style.borderRadius = '50%';
         this.element.style.zIndex = '10';
-        
+
         const stageElement = document.getElementById('stage')!;
         stageElement.appendChild(this.element);
-        
+
         this.spawn();
     }
 
+    // Boss 按 30px 的盒子占位，命中/碰撞统一走这个 footprint
+    footprint(): Grid.Rect {
+        return Grid.rect(this.X, this.Y, Boss.SIZE);
+    }
+
     spawn() {
-        // Random position
-        this.X = Math.round(Math.random() * 27) * 10;
-        this.Y = Math.round(Math.random() * 27) * 10;
-        this.element.style.left = this.X + 'px';
-        this.element.style.top = this.Y + 'px';
+        // 随机一个能容纳 30px 实体的合法落点（由 Grid 统一收窄到 0..270）
+        const p = Grid.randomPoint(Boss.SIZE);
+        this.X = p.x;
+        this.Y = p.y;
+        this.render();
     }
 
     takeDamage(damage: number = 1) {
@@ -55,21 +66,24 @@ export class Boss {
     }
 
     move() {
-        // Simple random movement
+        // Simple random movement（每步移动一格）
         const direction = Math.floor(Math.random() * 4);
-        switch(direction) {
-            case 0: this.Y -= 10; break;
-            case 1: this.Y += 10; break;
-            case 2: this.X -= 10; break;
-            case 3: this.X += 10; break;
+        switch (direction) {
+            case 0: this.Y -= Grid.CELL_SIZE; break;
+            case 1: this.Y += Grid.CELL_SIZE; break;
+            case 2: this.X -= Grid.CELL_SIZE; break;
+            case 3: this.X += Grid.CELL_SIZE; break;
         }
-        
-        // Boundaries check (0-290 for 30px boss means max is 270)
-        if (this.X < 0) this.X = 0;
-        if (this.X > 270) this.X = 270;
-        if (this.Y < 0) this.Y = 0;
-        if (this.Y > 270) this.Y = 270;
 
+        // 边界钳制由 Grid 按 Boss 尺寸统一处理（0..270）
+        this.X = Grid.clamp(this.X, Boss.SIZE);
+        this.Y = Grid.clamp(this.Y, Boss.SIZE);
+
+        this.render();
+    }
+
+    // 把坐标数据同步到 DOM（唯一写 DOM 的地方）
+    private render() {
         this.element.style.left = this.X + 'px';
         this.element.style.top = this.Y + 'px';
     }

@@ -1,4 +1,6 @@
-class Snake {
+import * as Grid from './Grid';
+
+class Snake implements Grid.GridEntity {
     // 表示蛇头的元素
     head: HTMLElement;
     // 蛇的身体（包括蛇头）
@@ -22,6 +24,11 @@ class Snake {
         return this.head.offsetTop;
     }
 
+    // 蛇头按「单格」占位，接入统一的占位/碰撞规则（坐标仍来自现有 getter）
+    footprint(): Grid.Rect {
+        return { x: this.X, y: this.Y, w: 0, h: 0 };
+    }
+
     // 设置蛇头的坐标
     set X(value: number) {
         // 如果新值和旧值相同，则直接返回不再修改
@@ -29,8 +36,8 @@ class Snake {
             return;
         }
 
-        // X的值的合法范围0-290之间
-        if (value < 0 || value > 290) {
+        // X的值的合法范围由 Grid 统一定义（0..290）
+        if (value < Grid.MIN || value > Grid.MAX) {
             // 进入判断说明蛇撞墙了
             throw new Error('蛇撞墙了！');
         }
@@ -63,8 +70,8 @@ class Snake {
             return;
         }
 
-        // Y的值的合法范围0-290之间
-        if (value < 0 || value > 290) {
+        // Y的值的合法范围由 Grid 统一定义（0..290）
+        if (value < Grid.MIN || value > Grid.MAX) {
             // 进入判断说明蛇撞墙了
             throw new Error('蛇撞墙了！');
         }

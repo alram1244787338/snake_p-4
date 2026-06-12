@@ -1,7 +1,12 @@
+import * as Grid from './Grid';
+
 export class ObstacleManager {
     obstacles: HTMLElement[] = [];
-    obstacleCoords: {x: number, y: number}[] = [];
+    obstacleCoords: Grid.Point[] = [];
     stageElement: HTMLElement;
+
+    // 出生保护区：左上角起步区域不放障碍物（游戏规则，保留原值）
+    static START_SAFE_ZONE = 50;
 
     constructor() {
         this.stageElement = document.getElementById('stage')!;
@@ -14,30 +19,31 @@ export class ObstacleManager {
         for (let i = 0; i < count; i++) {
             const obstacle = document.createElement('div');
             obstacle.className = 'obstacle';
-            obstacle.style.width = '10px';
-            obstacle.style.height = '10px';
+            obstacle.style.width = Grid.CELL_SIZE + 'px';
+            obstacle.style.height = Grid.CELL_SIZE + 'px';
             obstacle.style.backgroundColor = 'gray';
             obstacle.style.position = 'absolute';
-            
-            let x = 0;
-            let y = 0;
-            let overlap = true;
-            
-            // Simple collision avoidance for spawn
-            while(overlap) {
-                x = Math.round(Math.random() * 29) * 10;
-                y = Math.round(Math.random() * 29) * 10;
-                overlap = this.obstacleCoords.some(coord => coord.x === x && coord.y === y);
-                // Also avoid starting area (top-left)
-                if (x < 50 && y < 50) overlap = true;
-            }
 
-            obstacle.style.left = x + 'px';
-            obstacle.style.top = y + 'px';
+            // 随机落点由 Grid 统一生成；避让其它障碍物与起步区
+            let p: Grid.Point;
+            do {
+                p = Grid.randomPoint();
+            } while (
+                Grid.anyContainsPoint(this.obstacleCoords, p.x, p.y) ||
+                this.inStartZone(p)
+            );
+
+            obstacle.style.left = p.x + 'px';
+            obstacle.style.top = p.y + 'px';
             this.stageElement.appendChild(obstacle);
             this.obstacles.push(obstacle);
-            this.obstacleCoords.push({x, y});
+            this.obstacleCoords.push({ x: p.x, y: p.y });
         }
+    }
+
+    // 是否落在左上角起步保护区
+    private inStartZone(p: Grid.Point): boolean {
+        return p.x < ObstacleManager.START_SAFE_ZONE && p.y < ObstacleManager.START_SAFE_ZONE;
     }
 
     clearObstacles() {
@@ -47,8 +53,9 @@ export class ObstacleManager {
         this.obstacles = [];
         this.obstacleCoords = [];
     }
-    
+
+    // 某个点是否撞到任意障碍物（统一走 Grid 的占位判定）
     checkCollision(x: number, y: number): boolean {
-        return this.obstacleCoords.some(coord => coord.x === x && coord.y === y);
+        return Grid.anyContainsPoint(this.obstacleCoords, x, y);
     }
 }

@@ -1,48 +1,57 @@
+import * as Grid from './Grid';
+
 // 定义食物类
-class Food {
-    // 定义一个属性表示食物所对应的元素
+// 坐标以「数据字段」为唯一真源：构造时从 DOM 的初始位置播种一次，
+// 之后只用 change() 改数据并由 render() 同步到 DOM，不再用 offsetLeft/offsetTop 当数据源。
+class Food implements Grid.GridEntity {
+    // 食物对应的页面元素（只负责显示）
     element: HTMLElement;
 
+    // 食物坐标数据（真源）
+    private x: number;
+    private y: number;
+
     constructor() {
-        // 获取页面中的food元素并将其赋值给element
+        // 获取页面中的food元素
         // ! 表示该元素一定存在
         this.element = document.getElementById('food')!;
+        // 用初始 DOM 位置给坐标数据播种（保持开局位置与样式表一致），此后不再回读 DOM
+        this.x = this.element.offsetLeft;
+        this.y = this.element.offsetTop;
     }
 
-    // 定义一个获取食物X轴坐标的方法
+    // 食物X轴坐标（来自数据字段，对外保持原有读法 food.X）
     get X() {
-        return this.element.offsetLeft;
+        return this.x;
     }
 
-    // 定义一个获取食物Y轴坐标的方法
+    // 食物Y轴坐标
     get Y() {
-        return this.element.offsetTop;
+        return this.y;
     }
 
-    // 修改食物位置的方法
-    change(obstacles: {x: number, y: number}[] = []) {
-        // 生成随机的位置
-        // 食物的位置最小是0 最大是290
-        // 蛇移动一次就是一格，一格的大小就是10，所以食物的坐标必须是整10
-        let top, left;
-        let isValid = false;
+    // 食物按「单格」占位，接入统一的占位/碰撞规则
+    footprint(): Grid.Rect {
+        return { x: this.x, y: this.y, w: 0, h: 0 };
+    }
 
-        while (!isValid) {
-            top = Math.round(Math.random() * 29) * 10;
-            left = Math.round(Math.random() * 29) * 10;
+    // 修改食物位置：生成一个合法且不落在障碍物上的随机格点
+    // 坐标由 Grid 统一生成与避让，模块内不再手搓随机点与边界
+    change(obstacles: Grid.Point[] = []) {
+        let p: Grid.Point;
+        do {
+            p = Grid.randomPoint();
+        } while (Grid.anyContainsPoint(obstacles, p.x, p.y));
 
-            isValid = true;
-            // Check if food spawns on an obstacle
-            for (const obstacle of obstacles) {
-                if (left === obstacle.x && top === obstacle.y) {
-                    isValid = false;
-                    break;
-                }
-            }
-        }
+        this.x = p.x;
+        this.y = p.y;
+        this.render();
+    }
 
-        this.element.style.left = left + 'px';
-        this.element.style.top = top + 'px';
+    // 把坐标数据同步到 DOM（唯一写 DOM 的地方）
+    private render() {
+        this.element.style.left = this.x + 'px';
+        this.element.style.top = this.y + 'px';
     }
 }
 

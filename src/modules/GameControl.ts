@@ -5,6 +5,8 @@ import { ParticleSystem } from "./ParticleEffect";
 import { AudioManager } from "./AudioManager";
 import { ObstacleManager } from "./ObstacleManager";
 import { Boss } from "./Boss";
+import { Bullet } from "./Bullet";
+import * as Grid from "./Grid";
 
 // 游戏控制器，控制其他所有类
 class GameControl {
@@ -24,7 +26,7 @@ class GameControl {
     // Boss
     boss: Boss | null = null;
     // 子弹
-    bullets: HTMLDivElement[] = [];
+    bullets: Bullet[] = [];
 
     // 创建一个属性来存储蛇的移动方向（也就是按键的方向）
     direction: string = '';
@@ -160,64 +162,55 @@ class GameControl {
 
     shoot() {
         if (!this.isLive) return;
-        
-        const bullet = document.createElement('div');
-        bullet.style.width = '5px';
-        bullet.style.height = '5px';
-        bullet.style.backgroundColor = 'yellow';
-        bullet.style.position = 'absolute';
-        
-        let bx = this.snake.X + 5;
-        let by = this.snake.Y + 5;
-        
-        bullet.style.left = bx + 'px';
-        bullet.style.top = by + 'px';
-        
-        document.getElementById('stage')!.appendChild(bullet);
-        
+
+        const stage = document.getElementById('stage')!;
+
+        // 根据最近移动方向决定子弹速度，默认向右（与历史一致）
         let vx = 0;
         let vy = 0;
-        
-        // Determine bullet direction based on last move direction
-        // Default to right if no direction
-        if (this.direction === 'ArrowUp' || this.direction === 'Up' || this.direction === 'w') vy = -10;
-        else if (this.direction === 'ArrowDown' || this.direction === 'Down' || this.direction === 's') vy = 10;
-        else if (this.direction === 'ArrowLeft' || this.direction === 'Left' || this.direction === 'a') vx = -10;
-        else vx = 10; // Default right
+        if (this.direction === 'ArrowUp' || this.direction === 'Up' || this.direction === 'w') vy = -Bullet.SPEED;
+        else if (this.direction === 'ArrowDown' || this.direction === 'Down' || this.direction === 's') vy = Bullet.SPEED;
+        else if (this.direction === 'ArrowLeft' || this.direction === 'Left' || this.direction === 'a') vx = -Bullet.SPEED;
+        else vx = Bullet.SPEED; // Default right
+
+        // 子弹自己维护坐标与 DOM；命中/越界统一走 Grid 的占位规则
+        const bullet = new Bullet(this.snake.X + 5, this.snake.Y + 5, vx, vy, stage);
+        this.bullets.push(bullet);
 
         const bulletInterval = setInterval(() => {
-            bx += vx;
-            by += vy;
-            bullet.style.left = bx + 'px';
-            bullet.style.top = by + 'px';
+            bullet.step();
 
-            // Hit Boss
-            if (this.boss && this.boss.isAlive) {
-                if (bx >= this.boss.X && bx <= this.boss.X + 30 &&
-                    by >= this.boss.Y && by <= this.boss.Y + 30) {
-                        this.boss.takeDamage();
-                        clearInterval(bulletInterval);
-                        if(bullet.parentNode) bullet.parentNode.removeChild(bullet);
-                        
-                        // Particle effect on hit
-                        this.particleSystem.addParticles(bx, by, 5, 'red');
-                        
-                        if (!this.boss.isAlive) {
-                            this.boss = null;
-                            // Bonus points for killing boss
-                            this.scorePanel.score += 50;
-                            this.scorePanel.scoreEle.innerHTML = this.scorePanel.score + '';
-                        }
-                        return;
+            // Hit Boss（统一用 Grid.occupies，等价于原来的闭区间盒判定）
+            if (this.boss && this.boss.isAlive && Grid.occupies(this.boss, bullet.x, bullet.y)) {
+                this.boss.takeDamage();
+                clearInterval(bulletInterval);
+                this.removeBullet(bullet);
+
+                // Particle effect on hit
+                this.particleSystem.addParticles(bullet.x, bullet.y, 5, 'red');
+
+                if (!this.boss.isAlive) {
+                    this.boss = null;
+                    // Bonus points for killing boss
+                    this.scorePanel.score += 50;
+                    this.scorePanel.scoreEle.innerHTML = this.scorePanel.score + '';
                 }
+                return;
             }
 
             // Hit Wall or Obstacle
-            if (bx < 0 || bx > 290 || by < 0 || by > 290 || this.obstacleManager.checkCollision(bx, by)) {
+            if (bullet.isOutOfBounds() || this.obstacleManager.checkCollision(bullet.x, bullet.y)) {
                 clearInterval(bulletInterval);
-                if(bullet.parentNode) bullet.parentNode.removeChild(bullet);
+                this.removeBullet(bullet);
             }
         }, 30);
+    }
+
+    // 从场景与子弹列表中移除一颗子弹
+    removeBullet(bullet: Bullet) {
+        bullet.remove();
+        const idx = this.bullets.indexOf(bullet);
+        if (idx > -1) this.bullets.splice(idx, 1);
     }
 
     // 创建一个控制蛇移动的方法
@@ -275,8 +268,7 @@ class GameControl {
         
         // Check collision with Boss
         if (this.boss && this.boss.isAlive) {
-             if (X >= this.boss.X && X <= this.boss.X + 30 &&
-                 Y >= this.boss.Y && Y <= this.boss.Y + 30) {
+             if (Grid.occupies(this.boss, X, Y)) {
                      this.isLive = false;
                      this.audioManager.playDeath();
                      alert('被Boss打败了！ GAME OVER!');
