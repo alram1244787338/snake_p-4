@@ -87,6 +87,15 @@ class Snake {
         this.checkHeadBody();
     }
 
+    // 重置蛇为初始状态（蛇头回到原点），用于软重开而非刷新页面
+    reset() {
+        this.element.innerHTML = '<div></div>';
+        this.head = this.element.querySelector('div') as HTMLElement;
+        this.bodies = this.element.getElementsByTagName('div');
+        this.head.style.left = '0px';
+        this.head.style.top = '0px';
+    }
+
     // 蛇增加身体的方法
     addBody() {
         // 向element中添加一个div

@@ -100,6 +100,84 @@ body {
         animation: foodPulse 1s infinite;
       }
     }
+
+    // 子弹
+    .bullet {
+      width: 5px;
+      height: 5px;
+      position: absolute;
+      background-color: #f1c40f;
+      border-radius: 50%;
+      box-shadow: 0 0 6px #f1c40f;
+      z-index: 50;
+      pointer-events: none;
+    }
+
+    // 游戏结束覆盖层（替代 alert，常驻直到重开）
+    .game-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-flow: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      background: rgba(0, 0, 0, 0.62);
+      color: #fff;
+      text-align: center;
+      z-index: 1000;
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+
+      &.is-visible {
+        opacity: 1;
+        visibility: visible;
+      }
+
+      &__title {
+        font-size: 28px;
+        font-weight: bold;
+        letter-spacing: 2px;
+        color: #e74c3c;
+        text-shadow: 0 0 10px rgba(231, 76, 60, 0.6);
+      }
+
+      &__msg {
+        font-size: 16px;
+      }
+
+      &__hint {
+        font-size: 13px;
+        opacity: 0.85;
+      }
+    }
+
+    // 临时提示（切关 / 击败 Boss）
+    .game-toast {
+      position: absolute;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-6px);
+      padding: 6px 14px;
+      background: rgba(0, 0, 0, 0.55);
+      color: #fff;
+      font-size: 14px;
+      border-radius: 14px;
+      white-space: nowrap;
+      z-index: 1000;
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+
+      &.is-visible {
+        opacity: 1;
+        visibility: visible;
+        transform: translateX(-50%) translateY(0);
+      }
+    }
   }
 
   // 积分面板

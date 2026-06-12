@@ -1,36 +1,41 @@
 import Snake from "./Snake";
 import Food from "./Food";
 import ScorePanel from "./ScorePanel";
-import { ParticleSystem } from "./ParticleEffect";
-import { AudioManager } from "./AudioManager";
 import { ObstacleManager } from "./ObstacleManager";
 import { Boss } from "./Boss";
+import { BulletManager } from "./BulletManager";
+import { GamePresenter } from "./GamePresenter";
 
-// 游戏控制器，控制其他所有类
+// 游戏运行状态
+enum GameStatus {
+    Running,
+    GameOver,
+}
+
+// 游戏控制器：只负责游戏状态机、输入与移动循环这三件事。
+// 所有表现反馈（音效 / 粒子 / 分数展示 / 结束提示）都交给 GamePresenter，
+// 子弹的 DOM 与碰撞交给 BulletManager，分数数值交给 ScorePanel 模型——
+// GameControl 自己不再直接碰 DOM、不调度音效、也不用 alert / location.reload。
 class GameControl {
-    // 定义三个属性
     // 蛇
     snake: Snake;
     // 食物
     food: Food;
-    // 记分牌
+    // 记分牌（纯数值模型）
     scorePanel: ScorePanel;
-    // 粒子系统
-    particleSystem: ParticleSystem;
-    // 音效管理器
-    audioManager: AudioManager;
     // 障碍物管理器
     obstacleManager: ObstacleManager;
+    // 子弹管理器
+    bulletManager: BulletManager;
+    // 表现层门面
+    presenter: GamePresenter;
     // Boss
     boss: Boss | null = null;
-    // 子弹
-    bullets: HTMLDivElement[] = [];
 
-    // 创建一个属性来存储蛇的移动方向（也就是按键的方向）
+    // 蛇的移动方向（也就是按键的方向）
     direction: string = '';
-    // 创建一个属性用来记录游戏是否结束
-    isLive = true;
-    
+    // 游戏状态
+    status: GameStatus = GameStatus.Running;
     // 游戏速度
     speed: number = 300;
 
@@ -38,9 +43,9 @@ class GameControl {
         this.snake = new Snake();
         this.food = new Food();
         this.scorePanel = new ScorePanel(10, 5); // 每5分升级
-        this.particleSystem = new ParticleSystem();
-        this.audioManager = new AudioManager();
         this.obstacleManager = new ObstacleManager();
+        this.bulletManager = new BulletManager();
+        this.presenter = new GamePresenter();
 
         this.init();
     }
@@ -49,15 +54,13 @@ class GameControl {
     init() {
         // 绑定键盘按键按下的事件
         document.addEventListener('keydown', this.keydownHandler.bind(this));
-        
-        // 初始化障碍物
+
+        // 初始化障碍物与展示
         this.obstacleManager.generateObstacles(this.scorePanel.stage);
-        
-        // 播放背景音乐
-        // 注意：浏览器可能阻止自动播放，需要在用户交互后播放
-        document.addEventListener('click', () => {
-            this.audioManager.playBgm();
-        }, { once: true });
+        this.presenter.syncStats(this.scorePanel.snapshot());
+
+        // 背景音乐需用户首次交互后才能播放，交给表现层处理
+        this.presenter.enableBgmOnFirstInteraction();
 
         // 调用run方法，使蛇移动
         this.run();
@@ -72,9 +75,6 @@ class GameControl {
 
     // 创建一个键盘按下的响应函数
     keydownHandler(event: KeyboardEvent) {
-        // 需要检查event.key的值是否合法（用户是否按了正确的按键）
-        // 修改direction属性
-        
         // Prevent default scrolling for arrow keys
         if(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].indexOf(event.key) > -1) {
             event.preventDefault();
@@ -106,7 +106,7 @@ class GameControl {
                     this.direction = event.key;
                 break;
             case 'r':
-                this.restartGame();
+                this.restart();
                 break;
             case 't':
                 this.prevStage();
@@ -126,29 +126,49 @@ class GameControl {
         }
     }
 
-    restartGame() {
-        location.reload();
+    // 软重开：不刷新页面，逐项复位状态与展示后恢复循环
+    restart() {
+        const wasOver = this.status === GameStatus.GameOver;
+
+        this.snake.reset();
+        this.scorePanel.reset();
+        this.direction = '';
+        this.speed = 300;
+        this.bulletManager.clear();
+        if (this.boss) {
+            this.boss.die();
+            this.boss = null;
+        }
+        this.obstacleManager.generateObstacles(this.scorePanel.stage);
+        this.food.change(this.obstacleManager.obstacleCoords);
+
+        this.status = GameStatus.Running;
+        this.presenter.onRestart(this.scorePanel.snapshot());
+
+        // 仅当此前已结束（循环已停）时才重新启动循环，避免重复定时器
+        if (wasOver) {
+            this.run();
+        }
     }
 
     prevStage() {
-        if (this.scorePanel.stage > 1) {
-            this.scorePanel.setStage(this.scorePanel.stage - 1);
+        if (this.scorePanel.setStage(this.scorePanel.stage - 1)) {
             this.resetStage();
         }
     }
 
     nextStage() {
-        if (this.scorePanel.stage < this.scorePanel.maxStage) {
-            this.scorePanel.setStage(this.scorePanel.stage + 1);
+        if (this.scorePanel.setStage(this.scorePanel.stage + 1)) {
             this.resetStage();
         }
     }
 
+    // 切关：清子弹、重建障碍物与食物、按关卡决定是否生成 Boss
     resetStage() {
+        this.bulletManager.clear();
         this.obstacleManager.generateObstacles(this.scorePanel.stage);
         this.food.change(this.obstacleManager.obstacleCoords);
-        
-        // Boss check
+
         if (this.boss) {
             this.boss.die();
             this.boss = null;
@@ -156,80 +176,39 @@ class GameControl {
         if (this.scorePanel.stage % 5 === 0) {
             this.boss = new Boss(this.scorePanel.stage);
         }
+
+        this.presenter.onStageReset(this.scorePanel.snapshot());
     }
 
+    // 发射子弹：子弹的 DOM / 移动 / 碰撞全部交给 BulletManager，命中 Boss 时回调处理规则
     shoot() {
-        if (!this.isLive) return;
-        
-        const bullet = document.createElement('div');
-        bullet.style.width = '5px';
-        bullet.style.height = '5px';
-        bullet.style.backgroundColor = 'yellow';
-        bullet.style.position = 'absolute';
-        
-        let bx = this.snake.X + 5;
-        let by = this.snake.Y + 5;
-        
-        bullet.style.left = bx + 'px';
-        bullet.style.top = by + 'px';
-        
-        document.getElementById('stage')!.appendChild(bullet);
-        
-        let vx = 0;
-        let vy = 0;
-        
-        // Determine bullet direction based on last move direction
-        // Default to right if no direction
-        if (this.direction === 'ArrowUp' || this.direction === 'Up' || this.direction === 'w') vy = -10;
-        else if (this.direction === 'ArrowDown' || this.direction === 'Down' || this.direction === 's') vy = 10;
-        else if (this.direction === 'ArrowLeft' || this.direction === 'Left' || this.direction === 'a') vx = -10;
-        else vx = 10; // Default right
+        if (this.status !== GameStatus.Running) return;
 
-        const bulletInterval = setInterval(() => {
-            bx += vx;
-            by += vy;
-            bullet.style.left = bx + 'px';
-            bullet.style.top = by + 'px';
+        this.bulletManager.spawn(this.snake.X, this.snake.Y, this.direction, {
+            getBoss: () => this.boss,
+            getObstacleCoords: () => this.obstacleManager.obstacleCoords,
+            onBossHit: (x, y) => this.handleBossHit(x, y),
+        });
+    }
 
-            // Hit Boss
-            if (this.boss && this.boss.isAlive) {
-                if (bx >= this.boss.X && bx <= this.boss.X + 30 &&
-                    by >= this.boss.Y && by <= this.boss.Y + 30) {
-                        this.boss.takeDamage();
-                        clearInterval(bulletInterval);
-                        if(bullet.parentNode) bullet.parentNode.removeChild(bullet);
-                        
-                        // Particle effect on hit
-                        this.particleSystem.addParticles(bx, by, 5, 'red');
-                        
-                        if (!this.boss.isAlive) {
-                            this.boss = null;
-                            // Bonus points for killing boss
-                            this.scorePanel.score += 50;
-                            this.scorePanel.scoreEle.innerHTML = this.scorePanel.score + '';
-                        }
-                        return;
-                }
-            }
+    // 子弹命中 Boss 的规则处理：扣血 + 受击特效，击杀则加分并触发击败反馈
+    handleBossHit(x: number, y: number) {
+        if (!this.boss || !this.boss.isAlive) return;
 
-            // Hit Wall or Obstacle
-            if (bx < 0 || bx > 290 || by < 0 || by > 290 || this.obstacleManager.checkCollision(bx, by)) {
-                clearInterval(bulletInterval);
-                if(bullet.parentNode) bullet.parentNode.removeChild(bullet);
-            }
-        }, 30);
+        this.boss.takeDamage();
+        this.presenter.onBossHit(x, y);
+
+        if (!this.boss.isAlive) {
+            const state = this.scorePanel.addBonus(50); // 击败 Boss 奖励 50 分
+            this.presenter.onBossDefeated(x, y, state);
+            this.boss = null;
+        }
     }
 
     // 创建一个控制蛇移动的方法
     run() {
-        if(!this.isLive) return;
-        /*
-        *   根据方向（this.direction）来使蛇的位置改变
-        *       向上 top 减少
-        *       向下 top 增加
-        *       向左 left 减少
-        *       向右 left 增加
-        * */
+        if (this.status !== GameStatus.Running) return;
+
         // 获取蛇现在坐标
         let X = this.snake.X;
         let Y = this.snake.Y;
@@ -239,25 +218,21 @@ class GameControl {
             case "ArrowUp":
             case "Up":
             case "w":
-                // 向上移动 top 减少
                 Y -= 10;
                 break;
             case "ArrowDown":
             case "Down":
             case "s":
-                // 向下移动 top 增加
                 Y += 10;
                 break;
             case "ArrowLeft":
             case "Left":
             case "a":
-                // 向左移动 left 减少
                 X -= 10;
                 break;
             case "ArrowRight":
             case "Right":
             case "d":
-                // 向右移动 left 增加
                 X += 10;
                 break;
         }
@@ -265,80 +240,62 @@ class GameControl {
         // 检查蛇是否吃到了食物
         this.checkEat(X, Y);
 
-        // Check collision with obstacles
+        // 撞到障碍物
         if (this.obstacleManager.checkCollision(X, Y)) {
-             this.isLive = false;
-             this.audioManager.playDeath();
-             alert('撞到障碍物了！ GAME OVER!');
-             return;
-        }
-        
-        // Check collision with Boss
-        if (this.boss && this.boss.isAlive) {
-             if (X >= this.boss.X && X <= this.boss.X + 30 &&
-                 Y >= this.boss.Y && Y <= this.boss.Y + 30) {
-                     this.isLive = false;
-                     this.audioManager.playDeath();
-                     alert('被Boss打败了！ GAME OVER!');
-                     return;
-             }
-             // Boss moves
-             if(Math.random() < 0.1) this.boss.move(); // Boss moves occasionally
+            this.gameOver('撞到障碍物了！');
+            return;
         }
 
-        //修改蛇的X和Y值
+        // 撞到 Boss
+        if (this.boss && this.boss.isAlive) {
+            if (X >= this.boss.X && X <= this.boss.X + 30 &&
+                Y >= this.boss.Y && Y <= this.boss.Y + 30) {
+                this.gameOver('被Boss打败了！');
+                return;
+            }
+            // Boss 偶尔移动
+            if (Math.random() < 0.1) this.boss.move();
+        }
+
+        // 修改蛇的X和Y值（撞墙 / 撞自己会抛异常）
         try {
             this.snake.X = X;
             this.snake.Y = Y;
         } catch (e: any) {
-            // 进入到catch，说明出现了异常，游戏结束，弹出一个提示框
-            this.audioManager.playDeath();
-            alert(e.message + ' GAME OVER!');
-            // 将isLive设置为false
-            this.isLive = false;
+            this.gameOver(e.message);
+            return;
         }
 
-        // 更新粒子系统（安全更新）
-        if (this.particleSystem && this.particleSystem.update) {
-            this.particleSystem.update();
-        }
+        // 推进粒子系统
+        this.presenter.tick();
 
         // 开启一个定时调用
-        this.isLive && setTimeout(this.run.bind(this), this.speed);
+        setTimeout(this.run.bind(this), this.speed);
     }
 
-    // 定义一个方法，用来检查蛇是否吃到食物
+    // 检查蛇是否吃到食物
     checkEat(X: number, Y: number) {
         if (X === this.food.X && Y === this.food.Y) {
-            // 播放吃食物音效
-            this.audioManager.playEat();
-
-            // 在食物位置创建粒子特效
-            try {
-                this.particleSystem.addParticles(
-                    X + 5,
-                    Y + 5,
-                    10,
-                    '#FFD700'
-                );
-            } catch (e) {
-                // 粒子特效错误不影响游戏继续
-                console.error('Particle effect error:', e);
-            }
-            
-            // 食物的位置要进行重置
+            // 分数增加（模型返回本次变化）
+            const state = this.scorePanel.addScore();
+            // 食物重置 + 蛇增加一节
             this.food.change(this.obstacleManager.obstacleCoords);
-            // 分数增加
-            const currentStage = this.scorePanel.stage;
-            this.scorePanel.addScore();
-            // Check if stage increased
-            if (this.scorePanel.stage > currentStage) {
+            this.snake.addBody();
+            // 表现反馈：音效 + 粒子 + 刷新分数（升级时附带提示）
+            this.presenter.onFoodEaten(X, Y, state);
+            // 升级则切关
+            if (state.leveledUp) {
                 this.resetStage();
             }
-
-            // 蛇要增加一节
-            this.snake.addBody();
         }
+    }
+
+    // 统一的游戏结束入口：替代散落的 alert，仅做状态切换并交表现层提示
+    gameOver(message: string) {
+        if (this.status === GameStatus.GameOver) return;
+        this.status = GameStatus.GameOver;
+        this.bulletManager.clear();
+        this.presenter.onGameOver(message);
     }
 }
 
