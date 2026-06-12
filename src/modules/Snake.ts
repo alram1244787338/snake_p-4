@@ -1,3 +1,9 @@
+import { GRID_SIZE, STAGE_WIDTH, STAGE_HEIGHT } from './GridSystem';
+
+/** 蛇头允许的最大坐标值 */
+const MAX_X = STAGE_WIDTH - GRID_SIZE;   // 290
+const MAX_Y = STAGE_HEIGHT - GRID_SIZE;  // 290
+
 class Snake {
     // 表示蛇头的元素
     head: HTMLElement;
@@ -29,22 +35,19 @@ class Snake {
             return;
         }
 
-        // X的值的合法范围0-290之间
-        if (value < 0 || value > 290) {
+        // X的值的合法范围 0 ~ MAX_X
+        if (value < 0 || value > MAX_X) {
             // 进入判断说明蛇撞墙了
             throw new Error('蛇撞墙了！');
         }
 
         // 修改x时，是在修改水平坐标，蛇在左右移动，蛇在向左移动时，不能向右掉头，反之亦然
         if (this.bodies[1] && (this.bodies[1] as HTMLElement).offsetLeft === value) {
-            // console.log('水平方向发生了掉头');
             // 如果发生了掉头，让蛇向反方向继续移动
             if (value > this.X) {
-                // 如果新值value大于旧值X，则说明蛇在向右走，此时发生掉头，应该使蛇继续向左走
-                value = this.X - 10;
+                value = this.X - GRID_SIZE;
             } else {
-                // 向左走
-                value = this.X + 10;
+                value = this.X + GRID_SIZE;
             }
         }
 
@@ -63,8 +66,8 @@ class Snake {
             return;
         }
 
-        // Y的值的合法范围0-290之间
-        if (value < 0 || value > 290) {
+        // Y的值的合法范围 0 ~ MAX_Y
+        if (value < 0 || value > MAX_Y) {
             // 进入判断说明蛇撞墙了
             throw new Error('蛇撞墙了！');
         }
@@ -72,9 +75,9 @@ class Snake {
         // 修改y时，是在修改垂直坐标，蛇在上下移动，蛇在向上移动时，不能向下掉头，反之亦然
         if (this.bodies[1] && (this.bodies[1] as HTMLElement).offsetTop === value) {
             if (value > this.Y) {
-                value = this.Y - 10;
+                value = this.Y - GRID_SIZE;
             } else {
-                value = this.Y + 10;
+                value = this.Y + GRID_SIZE;
             }
         }
 
@@ -91,11 +94,11 @@ class Snake {
     addBody() {
         // 向element中添加一个div
         this.element.insertAdjacentHTML("beforeend", "<div></div>");
-        
+
         // 为新增加的身体设置初始位置（与最后一个身体相同）
         const newBody = this.bodies[this.bodies.length - 1] as HTMLElement;
         const lastBody = this.bodies[this.bodies.length - 2] as HTMLElement;
-        
+
         if (lastBody) {
             newBody.style.left = lastBody.offsetLeft + 'px';
             newBody.style.top = lastBody.offsetTop + 'px';
@@ -129,7 +132,7 @@ class Snake {
         if (this.bodies.length <= 4) {
             return;
         }
-        
+
         // 获取所有的身体，检查其是否和蛇头的坐标发生重叠
         for (let i = 4; i < this.bodies.length; i++) {
             let bd = this.bodies[i] as HTMLElement;

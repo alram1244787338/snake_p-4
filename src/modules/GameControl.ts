@@ -5,32 +5,28 @@ import { ParticleSystem } from "./ParticleEffect";
 import { AudioManager } from "./AudioManager";
 import { ObstacleManager } from "./ObstacleManager";
 import { Boss } from "./Boss";
+import { GRID_SIZE, maxXFor, maxYFor } from "./GridSystem";
+import { entityRegistry } from "./EntityRegistry";
+
+/** 子弹尺寸（像素） */
+const BULLET_SIZE = 5;
 
 // 游戏控制器，控制其他所有类
 class GameControl {
-    // 定义三个属性
-    // 蛇
+    // 定义属性
     snake: Snake;
-    // 食物
     food: Food;
-    // 记分牌
     scorePanel: ScorePanel;
-    // 粒子系统
     particleSystem: ParticleSystem;
-    // 音效管理器
     audioManager: AudioManager;
-    // 障碍物管理器
     obstacleManager: ObstacleManager;
-    // Boss
     boss: Boss | null = null;
-    // 子弹
     bullets: HTMLDivElement[] = [];
 
-    // 创建一个属性来存储蛇的移动方向（也就是按键的方向）
+    // 蛇的移动方向（也就是按键的方向）
     direction: string = '';
-    // 创建一个属性用来记录游戏是否结束
+    // 记录游戏是否结束
     isLive = true;
-    
     // 游戏速度
     speed: number = 300;
 
@@ -45,16 +41,15 @@ class GameControl {
         this.init();
     }
 
-    // 游戏的初始化方法，调用后游戏即开始
+    // 游戏的初始化方法
     init() {
         // 绑定键盘按键按下的事件
         document.addEventListener('keydown', this.keydownHandler.bind(this));
-        
+
         // 初始化障碍物
         this.obstacleManager.generateObstacles(this.scorePanel.stage);
-        
-        // 播放背景音乐
-        // 注意：浏览器可能阻止自动播放，需要在用户交互后播放
+
+        // 播放背景音乐（浏览器可能阻止自动播放，需在用户交互后播放）
         document.addEventListener('click', () => {
             this.audioManager.playBgm();
         }, { once: true });
@@ -70,17 +65,14 @@ class GameControl {
     *   ArrowRight Right d
     * */
 
-    // 创建一个键盘按下的响应函数
+    // 键盘按键响应
     keydownHandler(event: KeyboardEvent) {
-        // 需要检查event.key的值是否合法（用户是否按了正确的按键）
-        // 修改direction属性
-        
         // Prevent default scrolling for arrow keys
-        if(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].indexOf(event.key) > -1) {
+        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].indexOf(event.key) > -1) {
             event.preventDefault();
         }
 
-        switch(event.key.toLowerCase()) {
+        switch (event.key.toLowerCase()) {
             case 'arrowup':
             case 'up':
             case 'w':
@@ -147,8 +139,8 @@ class GameControl {
     resetStage() {
         this.obstacleManager.generateObstacles(this.scorePanel.stage);
         this.food.change(this.obstacleManager.obstacleCoords);
-        
-        // Boss check
+
+        // Boss 处理
         if (this.boss) {
             this.boss.die();
             this.boss = null;
@@ -160,30 +152,29 @@ class GameControl {
 
     shoot() {
         if (!this.isLive) return;
-        
+
         const bullet = document.createElement('div');
-        bullet.style.width = '5px';
-        bullet.style.height = '5px';
+        bullet.style.width = BULLET_SIZE + 'px';
+        bullet.style.height = BULLET_SIZE + 'px';
         bullet.style.backgroundColor = 'yellow';
         bullet.style.position = 'absolute';
-        
+
         let bx = this.snake.X + 5;
         let by = this.snake.Y + 5;
-        
+
         bullet.style.left = bx + 'px';
         bullet.style.top = by + 'px';
-        
+
         document.getElementById('stage')!.appendChild(bullet);
-        
+
         let vx = 0;
         let vy = 0;
-        
+
         // Determine bullet direction based on last move direction
-        // Default to right if no direction
-        if (this.direction === 'ArrowUp' || this.direction === 'Up' || this.direction === 'w') vy = -10;
-        else if (this.direction === 'ArrowDown' || this.direction === 'Down' || this.direction === 's') vy = 10;
-        else if (this.direction === 'ArrowLeft' || this.direction === 'Left' || this.direction === 'a') vx = -10;
-        else vx = 10; // Default right
+        if (this.direction === 'ArrowUp' || this.direction === 'Up' || this.direction === 'w') vy = -GRID_SIZE;
+        else if (this.direction === 'ArrowDown' || this.direction === 'Down' || this.direction === 's') vy = GRID_SIZE;
+        else if (this.direction === 'ArrowLeft' || this.direction === 'Left' || this.direction === 'a') vx = -GRID_SIZE;
+        else vx = GRID_SIZE; // Default right
 
         const bulletInterval = setInterval(() => {
             bx += vx;
@@ -191,123 +182,121 @@ class GameControl {
             bullet.style.left = bx + 'px';
             bullet.style.top = by + 'px';
 
-            // Hit Boss
+            // ── 子弹 vs Boss（通过 EntityRegistry 统一碰撞） ──
             if (this.boss && this.boss.isAlive) {
-                if (bx >= this.boss.X && bx <= this.boss.X + 30 &&
-                    by >= this.boss.Y && by <= this.boss.Y + 30) {
-                        this.boss.takeDamage();
-                        clearInterval(bulletInterval);
-                        if(bullet.parentNode) bullet.parentNode.removeChild(bullet);
-                        
-                        // Particle effect on hit
-                        this.particleSystem.addParticles(bx, by, 5, 'red');
-                        
-                        if (!this.boss.isAlive) {
-                            this.boss = null;
-                            // Bonus points for killing boss
-                            this.scorePanel.score += 50;
-                            this.scorePanel.scoreEle.innerHTML = this.scorePanel.score + '';
-                        }
-                        return;
+                const bossHit = entityRegistry.findColliding(
+                    bx, by, BULLET_SIZE, BULLET_SIZE, ['boss'],
+                );
+                if (bossHit) {
+                    this.boss.takeDamage();
+                    clearInterval(bulletInterval);
+                    if (bullet.parentNode) bullet.parentNode.removeChild(bullet);
+
+                    // Particle effect on hit
+                    this.particleSystem.addParticles(bx, by, 5, 'red');
+
+                    if (!this.boss.isAlive) {
+                        this.boss = null;
+                        // Bonus points for killing boss
+                        this.scorePanel.score += 50;
+                        this.scorePanel.scoreEle.innerHTML = this.scorePanel.score + '';
+                    }
+                    return;
                 }
             }
 
-            // Hit Wall or Obstacle
-            if (bx < 0 || bx > 290 || by < 0 || by > 290 || this.obstacleManager.checkCollision(bx, by)) {
+            // ── 子弹 vs 墙壁 / 障碍物（通过 EntityRegistry 统一碰撞） ──
+            const hitObstacle = entityRegistry.findColliding(
+                bx, by, BULLET_SIZE, BULLET_SIZE, ['obstacle'],
+            );
+            if (
+                bx < 0 || bx > maxXFor(GRID_SIZE) ||
+                by < 0 || by > maxYFor(GRID_SIZE) ||
+                hitObstacle
+            ) {
                 clearInterval(bulletInterval);
-                if(bullet.parentNode) bullet.parentNode.removeChild(bullet);
+                if (bullet.parentNode) bullet.parentNode.removeChild(bullet);
             }
         }, 30);
     }
 
-    // 创建一个控制蛇移动的方法
+    // 蛇移动的主循环
     run() {
-        if(!this.isLive) return;
-        /*
-        *   根据方向（this.direction）来使蛇的位置改变
-        *       向上 top 减少
-        *       向下 top 增加
-        *       向左 left 减少
-        *       向右 left 增加
-        * */
+        if (!this.isLive) return;
+
         // 获取蛇现在坐标
         let X = this.snake.X;
         let Y = this.snake.Y;
 
-        // 根据按键方向来修改X值和Y值
+        // 根据按键方向来修改 X 值和 Y 值
         switch (this.direction) {
             case "ArrowUp":
             case "Up":
             case "w":
-                // 向上移动 top 减少
-                Y -= 10;
+                Y -= GRID_SIZE;
                 break;
             case "ArrowDown":
             case "Down":
             case "s":
-                // 向下移动 top 增加
-                Y += 10;
+                Y += GRID_SIZE;
                 break;
             case "ArrowLeft":
             case "Left":
             case "a":
-                // 向左移动 left 减少
-                X -= 10;
+                X -= GRID_SIZE;
                 break;
             case "ArrowRight":
             case "Right":
             case "d":
-                // 向右移动 left 增加
-                X += 10;
+                X += GRID_SIZE;
                 break;
         }
 
         // 检查蛇是否吃到了食物
         this.checkEat(X, Y);
 
-        // Check collision with obstacles
-        if (this.obstacleManager.checkCollision(X, Y)) {
-             this.isLive = false;
-             this.audioManager.playDeath();
-             alert('撞到障碍物了！ GAME OVER!');
-             return;
-        }
-        
-        // Check collision with Boss
-        if (this.boss && this.boss.isAlive) {
-             if (X >= this.boss.X && X <= this.boss.X + 30 &&
-                 Y >= this.boss.Y && Y <= this.boss.Y + 30) {
-                     this.isLive = false;
-                     this.audioManager.playDeath();
-                     alert('被Boss打败了！ GAME OVER!');
-                     return;
-             }
-             // Boss moves
-             if(Math.random() < 0.1) this.boss.move(); // Boss moves occasionally
+        // ── 蛇 vs 障碍物（通过 EntityRegistry 统一碰撞） ──
+        if (entityRegistry.checkGridCell(X, Y, ['obstacle'])) {
+            this.isLive = false;
+            this.audioManager.playDeath();
+            alert('撞到障碍物了！ GAME OVER!');
+            return;
         }
 
-        //修改蛇的X和Y值
+        // ── 蛇 vs Boss（通过 EntityRegistry 统一碰撞） ──
+        if (this.boss && this.boss.isAlive) {
+            const bossHit = entityRegistry.checkGridCell(X, Y, ['boss']);
+            if (bossHit) {
+                this.isLive = false;
+                this.audioManager.playDeath();
+                alert('被Boss打败了！ GAME OVER!');
+                return;
+            }
+            // Boss moves occasionally
+            if (Math.random() < 0.1) this.boss.move();
+        }
+
+        // 修改蛇的X和Y值
         try {
             this.snake.X = X;
             this.snake.Y = Y;
         } catch (e: any) {
-            // 进入到catch，说明出现了异常，游戏结束，弹出一个提示框
+            // 进入到catch，说明出现了异常，游戏结束
             this.audioManager.playDeath();
             alert(e.message + ' GAME OVER!');
-            // 将isLive设置为false
             this.isLive = false;
         }
 
-        // 更新粒子系统（安全更新）
+        // 更新粒子系统
         if (this.particleSystem && this.particleSystem.update) {
             this.particleSystem.update();
         }
 
-        // 开启一个定时调用
+        // 开启定时调用
         this.isLive && setTimeout(this.run.bind(this), this.speed);
     }
 
-    // 定义一个方法，用来检查蛇是否吃到食物
+    // 检查蛇是否吃到食物
     checkEat(X: number, Y: number) {
         if (X === this.food.X && Y === this.food.Y) {
             // 播放吃食物音效
@@ -322,10 +311,9 @@ class GameControl {
                     '#FFD700'
                 );
             } catch (e) {
-                // 粒子特效错误不影响游戏继续
                 console.error('Particle effect error:', e);
             }
-            
+
             // 食物的位置要进行重置
             this.food.change(this.obstacleManager.obstacleCoords);
             // 分数增加
