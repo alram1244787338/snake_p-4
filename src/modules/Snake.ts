@@ -129,7 +129,7 @@ class Snake {
         if (this.bodies.length <= 4) {
             return;
         }
-        
+
         // 获取所有的身体，检查其是否和蛇头的坐标发生重叠
         for (let i = 4; i < this.bodies.length; i++) {
             let bd = this.bodies[i] as HTMLElement;
@@ -138,6 +138,18 @@ class Snake {
                 throw new Error('撞到自己了！');
             }
         }
+    }
+
+    /** 重置蛇到初始状态：移除多余身体节段，蛇头归零 */
+    reset() {
+        // 移除所有身体节段（保留蛇头）
+        while (this.bodies.length > 1) {
+            const last = this.bodies[this.bodies.length - 1] as HTMLElement;
+            if (last.parentNode) last.parentNode.removeChild(last);
+        }
+        // 蛇头归位
+        this.head.style.left = '0px';
+        this.head.style.top = '0px';
     }
 }
 
